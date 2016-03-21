@@ -105,7 +105,7 @@ public class Surefire746Test
             new ArrayList<org.junit.runner.notification.RunListener>();
         customRunListeners.add( 0, jUnit4RunListener );
 
-        JUnitCoreWrapper.execute( testsToRun, jUnitCoreParameters, customRunListeners, null );
+        JCSJUnitCoreWrapper.execute( testsToRun, jUnitCoreParameters, customRunListeners, null );
 
         RunResult result = reporterFactory.close();
 

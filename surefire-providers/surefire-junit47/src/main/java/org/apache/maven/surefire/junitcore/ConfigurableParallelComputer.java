@@ -25,8 +25,11 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.apache.maven.surefire.util.NestedRuntimeException;
+import java.util.logging.Level;
 
+import org.apache.maven.surefire.providerapi.ProviderParameters;
+import org.apache.maven.surefire.util.NestedRuntimeException;
+import org.junit.experimental.cloud.policies.SamplePolicy;
 import org.junit.runner.Computer;
 import org.junit.runner.Runner;
 import org.junit.runners.ParentRunner;
@@ -35,126 +38,128 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 import org.junit.runners.model.RunnerScheduler;
 
+import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfiguration;
+import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfigurationBuilder;
+import at.ac.tuwien.infosys.jcloudscale.vm.JCloudScaleClient;
+import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfiguration;
+
 /*
  * @author Kristian Rosenvold
  */
-public class ConfigurableParallelComputer
-    extends Computer
-{
-    private final boolean fClasses;
+public class ConfigurableParallelComputer extends Computer {
+	private final boolean fClasses;
 
-    private final boolean fMethods;
+	private final boolean fMethods;
 
-    private final boolean fixedPool;
+	private final boolean fixedPool;
 
-    private final ExecutorService fService;
+	private final ExecutorService fService;
 
-    private final List<AsynchronousRunner> nonBlockers =
-        Collections.synchronizedList( new ArrayList<AsynchronousRunner>() );
+	private final List<AsynchronousRunner> nonBlockers = Collections
+			.synchronizedList(new ArrayList<AsynchronousRunner>());
 
+	public ConfigurableParallelComputer() {
+		this(true, true, Executors.newCachedThreadPool(), false);
+	}
 
-    public ConfigurableParallelComputer()
-    {
-        this( true, true, Executors.newCachedThreadPool(), false );
-    }
+	public ConfigurableParallelComputer(boolean fClasses, boolean fMethods) {
+		this(fClasses, fMethods, Executors.newCachedThreadPool(), false);
+	}
 
-    public ConfigurableParallelComputer( boolean fClasses, boolean fMethods )
-    {
-        this( fClasses, fMethods, Executors.newCachedThreadPool(), false );
-    }
+	public ConfigurableParallelComputer(boolean fClasses, boolean fMethods, Integer numberOfThreads, boolean perCore) {
+		this(fClasses, fMethods, Executors.newFixedThreadPool(
+				numberOfThreads * (perCore ? Runtime.getRuntime().availableProcessors() : 1)), true);
+	}
 
-    public ConfigurableParallelComputer( boolean fClasses, boolean fMethods, Integer numberOfThreads, boolean perCore )
-    {
-        this( fClasses, fMethods, Executors.newFixedThreadPool(
-            numberOfThreads * ( perCore ? Runtime.getRuntime().availableProcessors() : 1 ) ), true );
-    }
+	public void configureJCloudScale() {
 
-    private ConfigurableParallelComputer( boolean fClasses, boolean fMethods, ExecutorService executorService,
-                                          boolean fixedPool )
-    {
-        this.fClasses = fClasses;
-        this.fMethods = fMethods;
-        fService = executorService;
-        this.fixedPool = fixedPool;
-    }
+		// TODO Make this parametric somehow - for the moment we cap it to 10
+		// and use unlimited concurrency for tests in the same class per host.
+		// Probably 1 is better ?
+		SamplePolicy policy = new SamplePolicy(10, -1);
 
-    @SuppressWarnings( { "UnusedDeclaration" } )
-    public void close()
-        throws ExecutionException
-    {
-        for ( AsynchronousRunner nonBlocker : nonBlockers )
-        {
-            nonBlocker.waitForCompletion();
-        }
+		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
+				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
+						.withCommunicationServerPublisher(false).withMQServer("192.168.56.101", 61616)
+						.withLoggingClient(Level.INFO).withLoggingServer(Level.INFO).build();
 
-        fService.shutdown();
-        try
-        {
-            fService.awaitTermination( 10, java.util.concurrent.TimeUnit.SECONDS );
-        }
-        catch ( InterruptedException e )
-        {
-            throw new NestedRuntimeException( e );
-        }
-    }
+		JCloudScaleClient.setConfiguration(config);
 
-    private Runner parallelize( Runner runner, RunnerScheduler runnerInterceptor )
-    {
-        if ( runner instanceof ParentRunner<?> )
-        {
-            ( (ParentRunner<?>) runner ).setScheduler( runnerInterceptor );
-        }
-        return runner;
-    }
+		System.out.println("ConfigurableParallelComputer.configureJCloudScale()\n" + "==== ==== ==== ==== ==== ==== \n"
+				+ "JCSParallelRunner SETTING CONF () \n " + "==== ==== ==== ==== ==== ==== ");
+	}
 
-    private RunnerScheduler getMethodInterceptor()
-    {
-        if ( fClasses && fMethods )
-        {
-            final AsynchronousRunner blockingAsynchronousRunner = new AsynchronousRunner( fService );
-            nonBlockers.add( blockingAsynchronousRunner );
-            return blockingAsynchronousRunner;
-        }
-        return fMethods ? new AsynchronousRunner( fService ) : new SynchronousRunner();
-    }
+	private ConfigurableParallelComputer(boolean fClasses, boolean fMethods, ExecutorService executorService,
+			boolean fixedPool) {
+		this.fClasses = fClasses;
+		this.fMethods = fMethods;
+		fService = executorService;
+		this.fixedPool = fixedPool;
 
-    private RunnerScheduler getClassInterceptor()
-    {
-        if ( fClasses )
-        {
-            return fMethods ? new SynchronousRunner() : new AsynchronousRunner( fService );
-        }
-        return new SynchronousRunner();
-    }
+		// Now configure Scaling policy and all the rest !
+		configureJCloudScale();
 
-    @Override
-    public Runner getSuite( RunnerBuilder builder, java.lang.Class<?>[] classes )
-        throws InitializationError
-    {
-        Runner suite = super.getSuite( builder, classes );
-        return fClasses ? parallelize( suite, getClassInterceptor() ) : suite;
-    }
+	}
 
-    @Override
-    protected Runner getRunner( RunnerBuilder builder, Class<?> testClass )
-        throws Throwable
-    {
-        Runner runner = super.getRunner( builder, testClass );
-        return fMethods && !isTestSuite( testClass ) ? parallelize( runner, getMethodInterceptor() ) : runner;
-    }
+	@SuppressWarnings({ "UnusedDeclaration" })
+	public void close() throws ExecutionException {
+		for (AsynchronousRunner nonBlocker : nonBlockers) {
+			nonBlocker.waitForCompletion();
+		}
 
-    private boolean isTestSuite( Class<?> testClass )
-    {
-        // Todo: Find out how/if this is enough
-        final Suite.SuiteClasses annotation = testClass.getAnnotation( Suite.SuiteClasses.class );
-        return ( annotation != null );
-    }
+		fService.shutdown();
+		try {
+			fService.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
+		} catch (InterruptedException e) {
+			throw new NestedRuntimeException(e);
+		}
+	}
 
-    @Override
-    public String toString()
-    {
-        return "ConfigurableParallelComputer{" + "classes=" + fClasses + ", methods=" + fMethods + ", fixedPool="
-            + fixedPool + '}';
-    }
+	private Runner parallelize(Runner runner, RunnerScheduler runnerInterceptor) {
+		if (runner instanceof ParentRunner<?>) {
+			((ParentRunner<?>) runner).setScheduler(runnerInterceptor);
+		}
+		return runner;
+	}
+
+	private RunnerScheduler getMethodInterceptor() {
+		if (fClasses && fMethods) {
+			final AsynchronousRunner blockingAsynchronousRunner = new AsynchronousRunner(fService);
+			nonBlockers.add(blockingAsynchronousRunner);
+			return blockingAsynchronousRunner;
+		}
+		return fMethods ? new AsynchronousRunner(fService) : new SynchronousRunner();
+	}
+
+	private RunnerScheduler getClassInterceptor() {
+		if (fClasses) {
+			return fMethods ? new SynchronousRunner() : new AsynchronousRunner(fService);
+		}
+		return new SynchronousRunner();
+	}
+
+	@Override
+	public Runner getSuite(RunnerBuilder builder, java.lang.Class<?>[] classes) throws InitializationError {
+		Runner suite = super.getSuite(builder, classes);
+		return fClasses ? parallelize(suite, getClassInterceptor()) : suite;
+	}
+
+	@Override
+	protected Runner getRunner(RunnerBuilder builder, Class<?> testClass) throws Throwable {
+		Runner runner = super.getRunner(builder, testClass);
+		return fMethods && !isTestSuite(testClass) ? parallelize(runner, getMethodInterceptor()) : runner;
+	}
+
+	private boolean isTestSuite(Class<?> testClass) {
+		// Todo: Find out how/if this is enough
+		final Suite.SuiteClasses annotation = testClass.getAnnotation(Suite.SuiteClasses.class);
+		return (annotation != null);
+	}
+
+	@Override
+	public String toString() {
+		return "ConfigurableParallelComputer{" + "classes=" + fClasses + ", methods=" + fMethods + ", fixedPool="
+				+ fixedPool + '}';
+	}
 
 }

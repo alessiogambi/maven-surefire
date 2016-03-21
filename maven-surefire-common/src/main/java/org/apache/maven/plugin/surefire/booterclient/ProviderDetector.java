@@ -34,94 +34,77 @@ import java.util.Set;
  * @author Kristian Rosenvold
  * @noinspection UnusedDeclaration
  */
-public class ProviderDetector
-{
+public class ProviderDetector {
 
-    public static Set<String> getServiceNames( Class<?> clazz, ClassLoader classLoader )
-        throws IOException
-    {
-        final String resourceName = "META-INF/services/" + clazz.getName();
+	public static Set<String> getServiceNames(Class<?> clazz, ClassLoader classLoader) throws IOException {
+		System.out.println("ProviderDetector.getServiceNames()");
+		final String resourceName = "META-INF/services/" + clazz.getName();
 
-        if ( classLoader == null )
-        {
-            return Collections.emptySet();
-        }
-        final Enumeration<URL> urlEnumeration = classLoader.getResources( resourceName );
-        return getNames( urlEnumeration );
-    }
+		if (classLoader == null) {
+			return Collections.emptySet();
+		}
+		final Enumeration<URL> urlEnumeration = classLoader.getResources(resourceName);
+		return getNames(urlEnumeration);
+	}
 
+	/**
+	 * Method loadServices loads the services of a class that are defined using
+	 * the SPI mechanism.
+	 *
+	 * @param urlEnumeration
+	 *            The urls from the resource
+	 * @return The set of service provider names
+	 * @throws IOException
+	 *             When reading the streams fails
+	 */
+	private static Set<String> getNames(final Enumeration<URL> urlEnumeration) throws IOException {
+		final Set<String> names = new HashSet<String>();
+		nextUrl: while (urlEnumeration.hasMoreElements()) {
+			final URL url = urlEnumeration.nextElement();
+			final BufferedReader reader = getReader(url);
+			try {
+				String line;
+				while ((line = reader.readLine()) != null) {
+					int ci = line.indexOf('#');
+					if (ci >= 0) {
+						line = line.substring(0, ci);
+					}
+					line = line.trim();
+					int n = line.length();
+					if (n == 0) {
+						continue; // next line
+					}
 
-    /**
-     * Method loadServices loads the services of a class that are
-     * defined using the SPI mechanism.
-     *
-     * @param urlEnumeration The urls from the resource
-     * @return The set of service provider names
-     * @throws IOException When reading the streams fails
-     */
-    private static Set<String> getNames( final Enumeration<URL> urlEnumeration )
-        throws IOException
-    {
-        final Set<String> names = new HashSet<String>();
-        nextUrl:
-        while ( urlEnumeration.hasMoreElements() )
-        {
-            final URL url = urlEnumeration.nextElement();
-            final BufferedReader reader = getReader( url );
-            try
-            {
-                String line;
-                while ( ( line = reader.readLine() ) != null )
-                {
-                    int ci = line.indexOf( '#' );
-                    if ( ci >= 0 )
-                    {
-                        line = line.substring( 0, ci );
-                    }
-                    line = line.trim();
-                    int n = line.length();
-                    if ( n == 0 )
-                    {
-                        continue; // next line
-                    }
+					if ((line.indexOf(' ') >= 0) || (line.indexOf('\t') >= 0)) {
+						continue nextUrl; // next url
+					}
+					char cp = line.charAt(0); // should use codePointAt but this
+												// is JDK1.3
+					if (!Character.isJavaIdentifierStart(cp)) {
+						continue nextUrl; // next url
+					}
+					for (int i = 1; i < n; i++) {
+						cp = line.charAt(i); // should use codePointAt but this
+												// is JDK1.3
+						if (!Character.isJavaIdentifierPart(cp) && (cp != '.')) {
+							continue nextUrl; // next url
+						}
+					}
+					if (!names.contains(line)) {
+						names.add(line);
+					}
+				}
+			} finally {
+				reader.close();
+			}
+		}
 
-                    if ( ( line.indexOf( ' ' ) >= 0 ) || ( line.indexOf( '\t' ) >= 0 ) )
-                    {
-                        continue nextUrl; // next url
-                    }
-                    char cp = line.charAt( 0 ); // should use codePointAt but this is JDK1.3
-                    if ( !Character.isJavaIdentifierStart( cp ) )
-                    {
-                        continue nextUrl; // next url
-                    }
-                    for ( int i = 1; i < n; i++ )
-                    {
-                        cp = line.charAt( i );  // should use codePointAt but this is JDK1.3
-                        if ( !Character.isJavaIdentifierPart( cp ) && ( cp != '.' ) )
-                        {
-                            continue nextUrl; // next url
-                        }
-                    }
-                    if ( !names.contains( line ) )
-                    {
-                        names.add( line );
-                    }
-                }
-            }
-            finally
-            {
-                reader.close();
-            }
-        }
+		return names;
+	}
 
-        return names;
-    }
-
-    private static BufferedReader getReader( URL url )
-        throws IOException
-    {
-        final InputStream inputStream = url.openStream();
-        final InputStreamReader inputStreamReader = new InputStreamReader( inputStream );
-        return new BufferedReader( inputStreamReader );
-    }
+	private static BufferedReader getReader(URL url) throws IOException {
+		final InputStream inputStream = url.openStream();
+		final InputStreamReader inputStreamReader = new InputStreamReader(inputStream);
+		return new BufferedReader(inputStreamReader);
+	}
 }

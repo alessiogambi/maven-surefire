@@ -1,1 +1,1 @@
-org.apache.maven.surefire.junitcore.JUnitCoreProvider
+org.apache.maven.surefire.junitcore.JCSJUnitCoreProvider
