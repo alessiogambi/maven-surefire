@@ -25,11 +25,8 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.logging.Level;
 
-import org.apache.maven.surefire.providerapi.ProviderParameters;
 import org.apache.maven.surefire.util.NestedRuntimeException;
-import org.junit.experimental.cloud.policies.SamplePolicy;
 import org.junit.runner.Computer;
 import org.junit.runner.Runner;
 import org.junit.runners.ParentRunner;
@@ -37,11 +34,6 @@ import org.junit.runners.Suite;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 import org.junit.runners.model.RunnerScheduler;
-
-import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfiguration;
-import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfigurationBuilder;
-import at.ac.tuwien.infosys.jcloudscale.vm.JCloudScaleClient;
-import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfiguration;
 
 /*
  * @author Kristian Rosenvold
@@ -71,34 +63,12 @@ public class ConfigurableParallelComputer extends Computer {
 				numberOfThreads * (perCore ? Runtime.getRuntime().availableProcessors() : 1)), true);
 	}
 
-	public void configureJCloudScale() {
-
-		// TODO Make this parametric somehow - for the moment we cap it to 10
-		// and use unlimited concurrency for tests in the same class per host.
-		// Probably 1 is better ?
-		SamplePolicy policy = new SamplePolicy(10, -1);
-
-		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
-				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
-						.withCommunicationServerPublisher(false).withMQServer("192.168.56.101", 61616)
-						.withLoggingClient(Level.INFO).withLoggingServer(Level.INFO).build();
-
-		JCloudScaleClient.setConfiguration(config);
-
-		System.out.println("ConfigurableParallelComputer.configureJCloudScale()\n" + "==== ==== ==== ==== ==== ==== \n"
-				+ "JCSParallelRunner SETTING CONF () \n " + "==== ==== ==== ==== ==== ==== ");
-	}
-
 	private ConfigurableParallelComputer(boolean fClasses, boolean fMethods, ExecutorService executorService,
 			boolean fixedPool) {
 		this.fClasses = fClasses;
 		this.fMethods = fMethods;
 		fService = executorService;
 		this.fixedPool = fixedPool;
-
-		// Now configure Scaling policy and all the rest !
-		configureJCloudScale();
-
 	}
 
 	@SuppressWarnings({ "UnusedDeclaration" })

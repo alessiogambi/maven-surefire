@@ -1,7 +1,5 @@
 package org.apache.maven.surefire.junitcore;
 
-import java.util.Arrays;
-
 /*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -24,11 +22,11 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+
 import org.apache.maven.surefire.common.junit4.JUnit4RunListener;
 import org.apache.maven.surefire.testset.TestSetFailedException;
 import org.apache.maven.surefire.util.TestsToRun;
 import org.junit.experimental.cloud.JCSParallelRunner;
-import org.junit.internal.builders.AllDefaultPossibilitiesBuilder;
 import org.junit.runner.Computer;
 import org.junit.runner.JUnitCore;
 import org.junit.runner.Request;
@@ -70,14 +68,7 @@ class JCSJUnitCoreWrapper {
 	public static void execute(TestsToRun testsToRun, JUnitCoreParameters jUnitCoreParameters,
 			List<RunListener> listeners, Filter filter) throws TestSetFailedException {
 
-		// TODO We alway force
-
-		// This is the one managing the multi-threading stuff.
-		// TODO This one is the one creating the wrapping suite using getSuite
-		// we need to extends or enforce our !
-		Computer computer = getComputer(jUnitCoreParameters);
-
-		System.out.println("JCSJUnitCoreWrapper.execute() Computer " + computer);
+		Computer computer = new JCSConfigurableParallelComputer();// getJCSComputer(jUnitCoreParameters);
 
 		JUnitCore junitCore = createJCSJUnitCore(listeners);
 
@@ -92,7 +83,6 @@ class JCSJUnitCoreWrapper {
 		}
 	}
 
-	// TODO Here we should add our listener
 	private static JUnitCore createJCSJUnitCore(List<RunListener> listeners) {
 		// System.out.println("JCSJUnitCoreWrapper.createJCSJUnitCore()");
 		JUnitCore junitCore = new JUnitCore();
@@ -106,9 +96,7 @@ class JCSJUnitCoreWrapper {
 
 	private static void executeEager(TestsToRun testsToRun, Filter filter, Computer computer, JUnitCore junitCore)
 			throws TestSetFailedException {
-		// System.out.println("JCSJUnitCoreWrapper.executeEager()");
 		Class[] tests = testsToRun.getLocatedClasses();
-		System.out.println("JCSJUnitCoreWrapper.executeEager() Tests " + Arrays.toString(tests));
 		createReqestAndRun(filter, computer, junitCore, tests);
 	}
 
@@ -126,13 +114,13 @@ class JCSJUnitCoreWrapper {
 		// Request req = Request.classes(computer, classesToRun);
 		Runner suite;
 		try {
-			suite = computer.getSuite(new RunnerBuilder() {
 
+			suite = computer.getSuite(new RunnerBuilder() {
 				@Override
 				public Runner runnerForClass(Class<?> testClass) throws Throwable {
-					System.out.println("JCSJUnitCoreWrapper.My run builder runner for class " + testClass);
-					// TODO Parameter passing ! Where parameters come from ?!
-					return new JCSParallelRunner(testClass, -1, -1);
+					// Use the default setting, we will overwrite the scheduler
+					// later inside the computer
+					return new JCSParallelRunner(testClass);
 				}
 			}, classesToRun);
 		} catch (InitializationError e) {
@@ -164,29 +152,9 @@ class JCSJUnitCoreWrapper {
 		}
 	}
 
-	private static Computer getComputer(JUnitCoreParameters jUnitCoreParameters) throws TestSetFailedException {
-		System.out.println("JCSJUnitCoreWrapper.getComputer() jUnitCoreParameters.isNoThreading() "
-				+ jUnitCoreParameters.isNoThreading());
-		if (jUnitCoreParameters.isNoThreading()) {
-			System.out.println("JCSJUnitCoreWrapper.getComputer() return a plain Computer");
-			return new Computer();
-		}
-		return getConfigurableParallelComputer(jUnitCoreParameters);
-	}
-
-	private static Computer getConfigurableParallelComputer(JUnitCoreParameters jUnitCoreParameters)
-			throws TestSetFailedException {
-
-		System.out.println("JUnitCoreWrapper.getConfigurableParallelComputer()");
-
-		if (jUnitCoreParameters.isUseUnlimitedThreads()) {
-			return new ConfigurableParallelComputer();
-		} else {
-			return new ConfigurableParallelComputer(
-					jUnitCoreParameters.isParallelClasses() | jUnitCoreParameters.isParallelBoth(),
-					jUnitCoreParameters.isParallelMethod() | jUnitCoreParameters.isParallelBoth(),
-					jUnitCoreParameters.getThreadCount(), jUnitCoreParameters.isPerCoreThreadCount());
-		}
-	}
+	// private static Computer getJCSComputer(JUnitCoreParameters
+	// jUnitCoreParameters) throws TestSetFailedException {
+	// return new JCSConfigurableParallelComputer(jUnitCoreParameters);
+	// }
 
 }

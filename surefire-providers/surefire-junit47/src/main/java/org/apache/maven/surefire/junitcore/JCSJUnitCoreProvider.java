@@ -81,8 +81,6 @@ public class JCSJUnitCoreProvider extends AbstractProvider {
 
 	public JCSJUnitCoreProvider(ProviderParameters providerParameters) {
 
-		System.out.println("JUnitCoreProvider.JUnitCoreProvider()");
-
 		this.providerParameters = providerParameters;
 		this.testClassLoader = providerParameters.getTestClassLoader();
 		this.scanResult = providerParameters.getScanResult();
@@ -106,12 +104,8 @@ public class JCSJUnitCoreProvider extends AbstractProvider {
 	}
 
 	public Iterator getSuites() {
-		System.out.println("JUnitCoreProvider.getSuites()");
-
 		final Filter filter = jUnit48Reflector.isJUnit48Available() ? createJUnit48Filter() : null;
 		testsToRun = scanClassPath();
-
-		System.out.println("JUnitCoreProvider.getSuites() " + testsToRun);
 		return testsToRun.iterator();
 	}
 
