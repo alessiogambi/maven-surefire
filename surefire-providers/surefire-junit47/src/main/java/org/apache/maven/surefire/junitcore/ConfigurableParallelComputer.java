@@ -73,6 +73,10 @@ public class ConfigurableParallelComputer extends Computer {
 
 	@SuppressWarnings({ "UnusedDeclaration" })
 	public void close() throws ExecutionException {
+
+		System.out.println("ConfigurableParallelComputer.close()");
+		System.out.println("ConfigurableParallelComputer.close()");
+		System.out.println("ConfigurableParallelComputer.close()");
 		for (AsynchronousRunner nonBlocker : nonBlockers) {
 			nonBlocker.waitForCompletion();
 		}

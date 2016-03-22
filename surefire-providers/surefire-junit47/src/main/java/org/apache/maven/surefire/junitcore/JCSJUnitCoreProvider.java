@@ -93,8 +93,8 @@ public class JCSJUnitCoreProvider extends AbstractProvider {
 
 		customRunListeners = JUnit4RunListenerFactory
 				.createCustomListeners(providerParameters.getProviderProperties().getProperty("listener"));
-		//
-		customRunListeners.add(new JCSJunitExecutionListener());
+		// For this later as we might need to place this before the others !
+		// customRunListeners.add(new JCSJunitExecutionListener());
 
 		jUnit48Reflector = new JUnit48Reflector(testClassLoader);
 	}

@@ -1,10 +1,8 @@
 package org.apache.maven.surefire.junitcore;
 
-import java.util.logging.Level;
+import java.util.concurrent.ExecutionException;
 
-import org.junit.experimental.cloud.JCSParallelRunner;
-import org.junit.experimental.cloud.policies.SamplePolicy;
-import org.junit.experimental.cloud.scheduling.JCSParallelScheduler;
+import org.junit.experimental.cloud.JCSSuiteParallelRunner;
 import org.junit.runner.Computer;
 import org.junit.runner.Runner;
 import org.junit.runners.ParentRunner;
@@ -12,52 +10,13 @@ import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
 import org.junit.runners.model.RunnerScheduler;
 
-import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfiguration;
-import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfigurationBuilder;
-import at.ac.tuwien.infosys.jcloudscale.vm.JCloudScaleClient;
-import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfiguration;
-
 /*
  * TODO FIXME Controlla perche' i test non vengono riportati, sembra quasi che faccia lo schedule e poi finito quello chi si e' visto si e' visto
  */
 public class JCSConfigurableParallelComputer extends Computer {
 
-	private int concurrentTestCasesLimit = Integer.parseInt(System.getProperty("concurrent.test.cases", "-1"));
-
-	private int concurrentTestPerTestClassLimit = Integer
-			.parseInt(System.getProperty("concurrent.test.methods.per.test.class", "-1"));
-
-	private int concurrentTestsPerHostLimit = Integer.parseInt(System.getProperty("concurrent.tests.per.host", "-1"));
-
-	private int concurrentTestsFromSameTestClassPerHost = Integer
-			.parseInt(System.getProperty("concurrent.test.methods.per.host", "-1"));
-
-	private int threadLimit = Integer.parseInt(System.getProperty("max.threads", "-1"));
-
-	private int sizeLimit = Integer.parseInt(System.getProperty("max.host", "-1"));
-
-	public JCSConfigurableParallelComputer() {
-		configureJCloudScale();
-	}
-
-	// TODO THIS IS NOT THE BEST WE CAN DO !
-	public void configureJCloudScale() {
-
-		SamplePolicy policy = new SamplePolicy(sizeLimit, concurrentTestsPerHostLimit,
-				concurrentTestsFromSameTestClassPerHost);
-
-		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
-				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
-						.withCommunicationServerPublisher(false).withMQServer("192.168.56.101", 61616)
-						.withLoggingClient(Level.OFF).withLoggingServer(Level.OFF).build();
-
-		JCloudScaleClient.setConfiguration(config);
-
-		// System.out.println("ConfigurableParallelComputer.configureJCloudScale()\n"
-		// + "==== ==== ==== ==== ==== ==== \n"
-		// + "JCSParallelRunner SETTING CONF () \n " + "==== ==== ==== ==== ====
-		// ==== ");
-	}
+	// For the moment run as many TestClasses as you like
+	// private final ExecutorService fService = Executors.newCachedThreadPool();
 
 	private Runner parallelize(Runner runner, RunnerScheduler runnerInterceptor) {
 		if (runner instanceof ParentRunner<?>) {
@@ -66,26 +25,55 @@ public class JCSConfigurableParallelComputer extends Computer {
 		return runner;
 	}
 
+	/**
+	 * We do not need to parallelize here as the runner is already parallelized!
+	 */
 	@Override
 	protected Runner getRunner(RunnerBuilder builder, Class<?> testClass) throws Throwable {
 		Runner runner = super.getRunner(builder, testClass);
-		//
-		if (runner instanceof JCSParallelRunner) {
-			// System.out.println("JCSConfigurableParallelComputer.getRunner()
-			// Overwrite the Scheduler with "
-			// + concurrentTestsLimit + " " + threadLimit);
-			((JCSParallelRunner) runner)
-					.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit, threadLimit));
-
-		}
+		System.out.println("\t\t JCSConfigurableParallelComputer.getRunner() " + runner);
 		return runner;
 	}
 
+	@SuppressWarnings({ "UnusedDeclaration" })
+	public void close() throws ExecutionException {
+
+		System.out.println("ConfigurableParallelComputer.close()");
+
+		// fService.shutdown();
+		// try {
+		// // This is quite bad..
+		// fService.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
+		// } catch (InterruptedException e) {
+		// throw new NestedRuntimeException(e);
+		// }
+	}
+
 	@Override
-	public Runner getSuite(RunnerBuilder builder, java.lang.Class<?>[] classes) throws InitializationError {
-		Runner suite = super.getSuite(builder, classes);
-		// Use the scheduler to parallelize the execution ?
-		return parallelize(suite, new JCSParallelScheduler(this.getClass(), concurrentTestCasesLimit, threadLimit));
+	public Runner getSuite(final RunnerBuilder builder, java.lang.Class<?>[] classes) throws InitializationError {
+		// Runner suite = super.getSuite(builder, classes);
+		Runner suite = new JCSSuiteParallelRunner(new RunnerBuilder() {
+			@Override
+			public Runner runnerForClass(Class<?> testClass) throws Throwable {
+				return getRunner(builder, testClass);
+			}
+		}, classes);
+
+		System.out.println("JCSConfigurableParallelComputer.getSuite() " + suite);
+		// Using only this suite will run one test case after the other, we need
+		// to parallelize this.
+		// return suite;
+
+		// The problem is that we cannot wrap this into a suite a run that
+		// otherwise we add an additional layer and reported numbers are
+		// inaccurate. So For the moment we rely on the same classes of
+		// ParallelComputer.
+		// In particular to Class level, since method level is already done
+		//
+		// This is fine for all super level of parallelism but still fails when
+		// it comes to reporting the final results
+		// return parallelize(suite, new AsynchronousRunner(fService));
+		return suite;
 	}
 
 }
