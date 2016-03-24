@@ -37,6 +37,6 @@ public class JUnit4ProviderTest
         providerParameters.setProviderProperties( new Properties() );
         providerParameters.setClassLoaders( this.getClass().getClassLoader(), this.getClass().getClassLoader() );
         providerParameters.setTestRequest( new TestRequest( null, null, null ) );
-        assertNotNull( new JUnit4Provider( providerParameters ) );
+        assertNotNull( new JCSJUnit4Provider( providerParameters ) );
     }
 }
