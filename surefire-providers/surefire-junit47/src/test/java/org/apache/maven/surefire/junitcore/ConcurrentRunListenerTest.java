@@ -32,7 +32,7 @@ import org.apache.maven.surefire.testset.TestSetFailedException;
 
 import junit.framework.Assert;
 import junit.framework.TestCase;
-import junit.framework.TestSuite;
+import junit.framework.JCSTestSuite;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.Computer;
@@ -297,7 +297,7 @@ public class ConcurrentRunListenerTest
 
         public static junit.framework.Test suite()
         {
-            TestSuite suite = new TestSuite();
+            JCSTestSuite suite = new JCSTestSuite();
             suite.addTest( new Junit3Tc1() );
             return suite;
         }
@@ -323,7 +323,7 @@ public class ConcurrentRunListenerTest
 
         public static junit.framework.Test suite()
         {
-            TestSuite suite = new TestSuite();
+            JCSTestSuite suite = new JCSTestSuite();
             suite.addTest( new Junit3Tc2( "testNotMuchJunit3TC2" ) );
             suite.addTest( new Junit3Tc2( "testStubJ3TC2A" ) );
             return suite;
@@ -335,7 +335,7 @@ public class ConcurrentRunListenerTest
     {
         public static junit.framework.Test suite()
         {
-            TestSuite suite = new TestSuite();
+            JCSTestSuite suite = new JCSTestSuite();
 
             suite.addTest( new Junit3OddTest1( "testMe" ) );
             suite.addTest( new Junit3OddTest1( "testMe" ) );
@@ -359,7 +359,7 @@ public class ConcurrentRunListenerTest
     {
         public static junit.framework.Test suite()
         {
-            TestSuite suite = new TestSuite();
+            JCSTestSuite suite = new JCSTestSuite();
 
             suite.addTest( new Junit3WithNestedSuite( "testMe2" ) );
             suite.addTest( new Junit3WithNestedSuite( "testMe2" ) );

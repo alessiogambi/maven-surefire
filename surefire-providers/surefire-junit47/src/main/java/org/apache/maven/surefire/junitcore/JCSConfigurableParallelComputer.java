@@ -3,6 +3,7 @@ package org.apache.maven.surefire.junitcore;
 import java.util.concurrent.ExecutionException;
 
 import org.junit.experimental.cloud.JCSSuiteParallelRunner;
+import org.junit.experimental.cloud.scheduling.JCSParallelScheduler;
 import org.junit.runner.Computer;
 import org.junit.runner.Runner;
 import org.junit.runners.ParentRunner;
@@ -31,7 +32,9 @@ public class JCSConfigurableParallelComputer extends Computer {
 	@Override
 	protected Runner getRunner(RunnerBuilder builder, Class<?> testClass) throws Throwable {
 		Runner runner = super.getRunner(builder, testClass);
+		// This one must be of type JCSRunner() !
 		System.out.println("\t\t JCSConfigurableParallelComputer.getRunner() " + runner);
+		parallelize(runner, new JCSParallelScheduler(testClass, 1, -1));
 		return runner;
 	}
 
@@ -51,29 +54,11 @@ public class JCSConfigurableParallelComputer extends Computer {
 
 	@Override
 	public Runner getSuite(final RunnerBuilder builder, java.lang.Class<?>[] classes) throws InitializationError {
-		// Runner suite = super.getSuite(builder, classes);
-		Runner suite = new JCSSuiteParallelRunner(new RunnerBuilder() {
-			@Override
-			public Runner runnerForClass(Class<?> testClass) throws Throwable {
-				return getRunner(builder, testClass);
-			}
-		}, classes);
-
-		System.out.println("JCSConfigurableParallelComputer.getSuite() " + suite);
-		// Using only this suite will run one test case after the other, we need
-		// to parallelize this.
-		// return suite;
-
-		// The problem is that we cannot wrap this into a suite a run that
-		// otherwise we add an additional layer and reported numbers are
-		// inaccurate. So For the moment we rely on the same classes of
-		// ParallelComputer.
-		// In particular to Class level, since method level is already done
-		//
-		// This is fine for all super level of parallelism but still fails when
-		// it comes to reporting the final results
-		// return parallelize(suite, new AsynchronousRunner(fService));
-		return suite;
+		System.out.println("JCSConfigurableParallelComputer.getSuite()");
+		Runner suite = super.getSuite(builder, classes); // This call all the
+															// possible
+		// TODO Change with parameters
+		return parallelize(suite, new JCSParallelScheduler(null, 1, -1));
 	}
 
 }

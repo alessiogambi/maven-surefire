@@ -25,11 +25,11 @@ import java.util.concurrent.ExecutionException;
 import java.util.logging.Level;
 
 import org.apache.maven.surefire.common.junit4.JUnit4RunListener;
+import org.apache.maven.surefire.report.ConsoleLogger;
 import org.apache.maven.surefire.testset.TestSetFailedException;
 import org.apache.maven.surefire.util.TestsToRun;
-import org.junit.experimental.cloud.JCSParallelRunner;
-import org.junit.experimental.cloud.JCSSuiteParallelRunner;
-import org.junit.experimental.cloud.listeners.JCSJunitExecutionListener;
+import org.junit.experimental.ParallelComputer;
+import org.junit.experimental.cloud.JCSRunner;
 import org.junit.experimental.cloud.policies.SamplePolicy;
 import org.junit.runner.Computer;
 import org.junit.runner.JUnitCore;
@@ -38,6 +38,7 @@ import org.junit.runner.Result;
 import org.junit.runner.Runner;
 import org.junit.runner.manipulation.Filter;
 import org.junit.runner.manipulation.NoTestsRemainException;
+import org.junit.runner.notification.Failure;
 import org.junit.runner.notification.RunListener;
 import org.junit.runners.model.InitializationError;
 import org.junit.runners.model.RunnerBuilder;
@@ -53,8 +54,10 @@ import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfigurati
  * @author Kristian Rosenvold
  */
 
+
 class JCSJUnitCoreWrapper {
 
+	// Move the configuration stuff in the provider not the Wrapper. Be ready to define an AbstracProvider for JCS
 	private static int concurrentTestCasesLimit = Integer.parseInt(System.getProperty("concurrent.test.cases", "-1"));
 
 	private static int concurrentTestPerTestClassLimit = Integer
@@ -66,7 +69,9 @@ class JCSJUnitCoreWrapper {
 	private static int concurrentTestsFromSameTestClassPerHost = Integer
 			.parseInt(System.getProperty("concurrent.test.methods.per.host", "-1"));
 
-	private static int threadLimit = Integer.parseInt(System.getProperty("max.threads", "-1"));
+	// IGNORED Use always as many thread as tests
+	// private static int threadLimit =
+	// Integer.parseInt(System.getProperty("max.threads", "-1"));
 
 	private static int sizeLimit = Integer.parseInt(System.getProperty("max.host", "-1"));
 
@@ -78,20 +83,12 @@ class JCSJUnitCoreWrapper {
 		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
 				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
 						.withCommunicationServerPublisher(false).withMQServer("192.168.56.101", 61616)
-						.withLoggingClient(Level.INFO).withLoggingServer(Level.INFO).build();
+						.withLoggingClient(Level.OFF).withLoggingServer(Level.OFF)
+						.withRedirectAllOutput(false)
+						.build();
 
 		JCloudScaleClient.setConfiguration(config);
 
-		System.out.println("ConfigurableParallelComputer.configureJCloudScale()\n" + "==== ==== ==== ==== ==== ==== \n"
-				+ "SETTING JCS CONF () \n " //
-				+ "concurrentTestCasesLimit\t" + concurrentTestCasesLimit + "\n"//
-				+ "concurrentTestPerTestClassLimit\t" + concurrentTestPerTestClassLimit + "\n"//
-				+ "concurrentTestsPerHostLimit\t" + concurrentTestsPerHostLimit + "\n"//
-				+ "concurrentTestsFromSameTestClassPerHost\t" + concurrentTestsFromSameTestClassPerHost + "\n"//
-				+ "threadLimit\t" + threadLimit + "\n"//
-				+ "sizeLimit\t" + sizeLimit + "\n"//
-
-				+ "" + "" + "==== ==== ==== ==== ==== ==== ");
 	}
 
 	private static class FilteringRequest extends Request {
@@ -114,31 +111,36 @@ class JCSJUnitCoreWrapper {
 	}
 
 	public static void execute(TestsToRun testsToRun, JUnitCoreParameters jUnitCoreParameters,
-			List<RunListener> listeners, Filter filter) throws TestSetFailedException {
+			List<RunListener> listeners, Filter filter, final ConsoleLogger consoleLogger)
+			throws TestSetFailedException {
+
+		// TODO Use String format for all ;)
+		if (consoleLogger != null)
+			consoleLogger.info("==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== \n" //
+					+ "\t\t Configuration \n" + "" + "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== \n" //
+					+ "\t concurrentTestCasesLimit\t\t" + String.format("%2s", concurrentTestCasesLimit) + "\n"//
+					+ "\t concurrentTestPerTestClassLimit\t" + String.format("%2s", concurrentTestPerTestClassLimit)
+					+ "\n"//
+					+ "\t concurrentTestsPerHostLimit\t\t" + String.format("%2s", concurrentTestsPerHostLimit) + "\n"//
+					+ "\t concurrentTestsFromSameTestClassPerHost"
+					+ String.format("%2s", concurrentTestsFromSameTestClassPerHost) + "\n"//
+					+ "\t sizeLimit\t\t\t\t" + String.format("%2s", sizeLimit) + "\n"//
+					+ "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====");
 
 		configureJCloudScale();
-		// Computer computer = getJCSComputer(jUnitCoreParameters); // new
-		// JCSConfigurableParallelComputer();
-		// The tirck with parallel Computer is that it uses the same executor
-		// service and wait the completion of it.
 
-		// How those two are related ? Can be that computer starts before ?
 		JUnitCore junitCore = createJCSJUnitCore(listeners);
 
-		// Computer computer =
-		// getConfigurableParallelComputer(jUnitCoreParameters);
 		Computer computer = getJCSParallelComputer();
-		System.out.println("JCSJUnitCoreWrapper.execute() USING " + computer);
 
 		try {
-			System.out.println("JCSJUnitCoreWrapper.execute() START");
 			if (testsToRun.allowEagerReading()) {
 				executeEager(testsToRun, filter, computer, junitCore);
 			} else {
 				exeuteLazy(testsToRun, filter, computer, junitCore);
 			}
 		} finally {
-			System.out.println("JCSJUnitCoreWrapper.execute() END");
+			// System.out.println("JCSJUnitCoreWrapper.execute() END");
 			closeIfConfigurable(computer);
 		}
 	}
@@ -146,12 +148,11 @@ class JCSJUnitCoreWrapper {
 	private static JUnitCore createJCSJUnitCore(List<RunListener> listeners) {
 		JUnitCore junitCore = new JUnitCore();
 
-		// Force our listener to be the first !
-		RunListener listener = new JCSJunitExecutionListener();
-		junitCore.addListener(listener);
-		System.out.println("JCSJUnitCoreWrapper.createJCSJUnitCore() Adding listener " + listener);
+		// Force our listener to be the first ! TODO This is problematic because
+		// JUnit does not notify correctly when tests end !
+		// RunListener listener = new JCSJunitExecutionListener();
+		// junitCore.addListener(listener);
 		for (RunListener runListener : listeners) {
-			System.out.println("JCSJUnitCoreWrapper.createJCSJUnitCore() Adding listener " + runListener);
 			junitCore.addListener(runListener);
 		}
 		return junitCore;
@@ -181,14 +182,16 @@ class JCSJUnitCoreWrapper {
 
 			@Override
 			public Runner runnerForClass(Class<?> testClass) throws Throwable {
-				System.out.println("JCSJUnitCoreWrapper.runnerForClass() " + testClass);
-				return new JCSParallelRunner(testClass, concurrentTestPerTestClassLimit, threadLimit);
+				return new JCSRunner(testClass);
 			}
 
 		};
+
 		Runner suite;
 		try {
-			suite = new JCSSuiteParallelRunner(builder, classesToRun, concurrentTestCasesLimit, threadLimit);
+			// suite = new JCSSuiteParallelRunner(builder, classesToRun,
+			// concurrentTestCasesLimit, threadLimit);
+			suite = computer.getSuite(builder, classesToRun);
 		} catch (InitializationError e) {
 			throw new RuntimeException(
 					"Bug in saff's brain: Suite constructor, called as above, should always complete");
@@ -203,25 +206,42 @@ class JCSJUnitCoreWrapper {
 			}
 		}
 
-		System.out.println("JCSJUnitCoreWrapper.createReqestAndRun() Start to run ");
+		// System.out.println("JCSJUnitCoreWrapper.createReqestAndRun() Start to
+		// run ");
 		final Result run = junitCore.run(req);
 		JUnit4RunListener.rethrowAnyTestMechanismFailures(run);
 
 		// Create another summary just for the sake of it, or try to synch this
 		// one with the "main" one that somehow has the wrong numbers since it
 		// outputs before the execution is over...
-		System.out.println("JCSJUnitCoreWrapper.createReqestAndRun() End of the run \n" //
-				+ "- " + run.getRunCount() + " -- \n" //
-				+ "- " + run.getFailureCount() + " -- \n" //
-				+ "- " + run.getIgnoreCount() + " -- \n"//
+		// TODO Better logger:
+
+		final String pads = "%" + "run.getRunTime()".length() + "s";
+		System.out.println("===============================================================\n"//
+				+ "JCS UNIT Results:\n" //
+				+ "===============================================================\n"//
+				+ "- TOTAL RUN:\t" + String.format(pads, run.getRunCount()) + "\n" //
+				+ "- FAILURES:\t" + String.format(pads, run.getFailureCount()) + "\n" //
+				+ "- IGNORED:\t" + String.format(pads, run.getIgnoreCount()) + "\n"//
 				//
-				+ run.getRunTime());
+				+ "- TIME:\t" + run.getRunTime() + "\n" //
+				+ "===============================================================");
+		if (run.getFailureCount() > 0) {
+			System.out.println("===============================================================\n"//
+					+ "JCS UNIT Failure summary:\n" //
+					+ "===============================================================");
+			for (Failure failure : run.getFailures()) {
+				System.out.println("\t" + failure);
+			}
+		}
+
 	}
 
 	private static void closeIfConfigurable(Computer computer) throws TestSetFailedException {
 		System.out.println("JCSJUnitCoreWrapper.closeIfConfigurable()");
 		if (computer instanceof ConfigurableParallelComputer) {
 			try {
+				System.out.println("JCSJUnitCoreWrapper.closeIfConfigurable() - OK");
 				((ConfigurableParallelComputer) computer).close();
 			} catch (ExecutionException e) {
 				throw new TestSetFailedException(e);
@@ -230,7 +250,7 @@ class JCSJUnitCoreWrapper {
 	}
 
 	private static Computer getJCSParallelComputer() throws TestSetFailedException {
-		return new JCSConfigurableParallelComputer();
+		return new ParallelComputer(concurrentTestCasesLimit, concurrentTestPerTestClassLimit);
 	}
 
 }

@@ -23,7 +23,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
 
 import org.apache.maven.surefire.common.junit4.JUnit4RunListenerFactory;
 import org.apache.maven.surefire.common.junit4.JUnit4TestChecker;
@@ -45,14 +44,7 @@ import org.apache.maven.surefire.util.ScannerFilter;
 import org.apache.maven.surefire.util.TestsToRun;
 import org.apache.maven.surefire.util.internal.StringUtils;
 import org.junit.experimental.cloud.listeners.JCSJunitExecutionListener;
-import org.junit.experimental.cloud.policies.SamplePolicy;
-import org.junit.experimental.cloud.shared.TestToHostMapping;
 import org.junit.runner.manipulation.Filter;
-
-import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfiguration;
-import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfigurationBuilder;
-import at.ac.tuwien.infosys.jcloudscale.vm.JCloudScaleClient;
-import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfiguration;
 
 /**
  * @author Kristian Rosenvold
@@ -93,8 +85,6 @@ public class JCSJUnitCoreProvider extends AbstractProvider {
 
 		customRunListeners = JUnit4RunListenerFactory
 				.createCustomListeners(providerParameters.getProviderProperties().getProperty("listener"));
-		// For this later as we might need to place this before the others !
-		// customRunListeners.add(new JCSJunitExecutionListener());
 
 		jUnit48Reflector = new JUnit48Reflector(testClassLoader);
 	}
@@ -136,9 +126,13 @@ public class JCSJUnitCoreProvider extends AbstractProvider {
 		}
 
 		org.junit.runner.notification.RunListener jUnit4RunListener = getRunListener(reporterFactory, consoleLogger);
+		//
 		customRunListeners.add(0, jUnit4RunListener);
+		// Adding ours AS FIRST AGAIN !
+		// customRunListeners.add(0, new JCSJunitExecutionListener());
 
-		JCSJUnitCoreWrapper.execute(testsToRun, jUnitCoreParameters, customRunListeners, filter);
+		JCSJUnitCoreWrapper.execute(testsToRun, jUnitCoreParameters, customRunListeners, filter, consoleLogger);
+
 		return reporterFactory.close();
 	}
 
