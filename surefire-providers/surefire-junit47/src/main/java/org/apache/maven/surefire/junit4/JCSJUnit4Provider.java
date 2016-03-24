@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import org.apache.maven.shared.utils.io.SelectorUtils;
 import org.apache.maven.surefire.common.junit4.JUnit4RunListener;
@@ -59,13 +60,14 @@ import org.junit.runners.model.RunnerScheduler;
 
 import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfiguration;
 import at.ac.tuwien.infosys.jcloudscale.configuration.JCloudScaleConfigurationBuilder;
+import at.ac.tuwien.infosys.jcloudscale.logging.Logged;
 import at.ac.tuwien.infosys.jcloudscale.vm.JCloudScaleClient;
-import at.ac.tuwien.infosys.jcloudscale.vm.localVm.LocalCloudPlatformConfiguration;
+import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfiguration;
 
 /**
- * @author Kristian Rosenvold TODO Make an AbstractJCSProvider that sets up the
- *         policy and all the rest !
+ * @author Alessio Gambi
  */
+@Logged
 public class JCSJUnit4Provider extends AbstractProvider {
 
 	private static int concurrentTestCasesLimit = Integer.parseInt(System.getProperty("concurrent.test.cases", "-1"));
@@ -79,27 +81,26 @@ public class JCSJUnit4Provider extends AbstractProvider {
 	private static int concurrentTestsFromSameTestClassPerHost = Integer
 			.parseInt(System.getProperty("concurrent.test.methods.per.host", "-1"));
 
-	// IGNORED Use always as many thread as tests
-	// private static int threadLimit =
-	// Integer.parseInt(System.getProperty("max.threads", "-1"));
-
 	private static int sizeLimit = Integer.parseInt(System.getProperty("max.host", "-1"));
 
+	/**
+	 * HARDCODED CONFIGURATION IS BAD, BUT ONLY SOME PARAMETERS SHOULD BE
+	 * EXPOSED.
+	 */
 	private static void configureJCloudScale() {
 
 		SamplePolicy policy = new SamplePolicy(sizeLimit, concurrentTestsPerHostLimit,
 				concurrentTestsFromSameTestClassPerHost);
 
-		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new LocalCloudPlatformConfiguration())
-				.with(policy).withLoggingClient(Level.OFF).withLoggingServer(Level.OFF).build();
-
 		// JCloudScaleConfiguration config = new
-		// JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
-		// "http://192.168.56.101:2375", "",
-		// "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
-		// .withCommunicationServerPublisher(false).withMQServer("192.168.56.101",
-		// 61616)
-		// .withLoggingClient(Level.OFF).withLoggingServer(Level.OFF).withRedirectAllOutput(true).build();
+		// JCloudScaleConfigurationBuilder(new
+		// LocalCloudPlatformConfiguration())
+		// .with(policy).withLoggingClient(Level.OFF).withLoggingServer(Level.OFF).build();
+
+		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
+				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
+						.withCommunicationServerPublisher(false).withMQServer("192.168.56.101", 61616)
+						.withLoggingClient(Level.OFF).withLoggingServer(Level.OFF).withRedirectAllOutput(true).build();
 
 		JCloudScaleClient.setConfiguration(config);
 
@@ -123,6 +124,8 @@ public class JCSJUnit4Provider extends AbstractProvider {
 
 	private final ScanResult scanResult;
 
+	private static Logger log;
+
 	public JCSJUnit4Provider(ProviderParameters booterParameters) {
 		this.providerParameters = booterParameters;
 		this.testClassLoader = booterParameters.getTestClassLoader();
@@ -133,12 +136,11 @@ public class JCSJUnit4Provider extends AbstractProvider {
 		jUnit4TestChecker = new JUnit4TestChecker(testClassLoader);
 		requestedTestMethod = booterParameters.getTestRequest().getRequestedTestMethod();
 
-		ConsoleLogger consoleLogger = booterParameters.getConsoleLogger();
-		consoleLogger.info("JUnit4Provider.JUnit4Provider()\n");
-
-		if (consoleLogger != null) {
-			consoleLogger.info("==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== \n" //
-					+ "\t\t Configuration \n" + "" + "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== \n" //
+		ConsoleLogger consoleLog = booterParameters.getConsoleLogger();
+		if (consoleLog != null) {
+			consoleLog.info("==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== \n" //
+					+ "\t\t JCS JUnit4Provider Configuration \n" + ""
+					+ "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== \n" //
 					+ "\t concurrentTestCasesLimit\t\t" + String.format("%2s", concurrentTestCasesLimit) + "\n"//
 					+ "\t concurrentTestPerTestClassLimit\t" + String.format("%2s", concurrentTestPerTestClassLimit)
 					+ "\n"//
@@ -146,18 +148,18 @@ public class JCSJUnit4Provider extends AbstractProvider {
 					+ "\t concurrentTestsFromSameTestClassPerHost"
 					+ String.format("%2s", concurrentTestsFromSameTestClassPerHost) + "\n"//
 					+ "\t sizeLimit\t\t\t\t" + String.format("%2s", sizeLimit) + "\n"//
-					+ "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====");
+					+ "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====\n");
 		}
 		configureJCloudScale();
+
+		//
+		log = JCloudScaleClient.getConfiguration().getLogger(getClass().getName());
 
 		scheduler = new JCSParallelScheduler(null, concurrentTestCasesLimit);
 
 	}
 
 	public RunResult invoke(Object forkTestSet) throws TestSetFailedException, ReporterException {
-		//
-		this.providerParameters.getConsoleLogger().info("JUnit4Provider.invoke() " + forkTestSet + "\n");
-
 		if (testsToRun == null) {
 			if (forkTestSet instanceof TestsToRun) {
 				testsToRun = (TestsToRun) forkTestSet;
@@ -188,7 +190,7 @@ public class JCSJUnit4Provider extends AbstractProvider {
 			Iterator<Class<?>> iter = testsToRun.iterator(); iter.hasNext();) {
 				// This shall submit test for the execution.
 				final Class<?> testClass = iter.next();
-				System.out.println("JCSJUnit4Provider.invoke() Submit " + testClass);
+				log.fine("\tSubmit " + testClass.getSimpleName() + " for execution");
 				scheduler.schedule(new Runnable() {
 					public void run() {
 						try {
@@ -202,12 +204,9 @@ public class JCSJUnit4Provider extends AbstractProvider {
 				});
 			}
 		} finally {
-			System.out.println(
-					"\n JCSJUnit4Provider.invoke() - Waiting for the threads to FINISH. All test cases submitted.");
+			log.fine("All test cases submitted.");
 			// Here let's wait for the result and blocks
 			scheduler.finished();
-
-			System.out.println("\n JCSJUnit4Provider.invoke() - All test cases Done.");
 		}
 
 		runNotifer.fireTestRunFinished(result);
@@ -221,8 +220,6 @@ public class JCSJUnit4Provider extends AbstractProvider {
 
 	private void executeTestSet(Class<?> clazz, RunListener reporter, RunNotifier listeners)
 			throws ReporterException, TestSetFailedException {
-
-		System.out.println("JCSJUnit4Provider.executeTestSet() " + clazz);
 
 		final ReportEntry report = new SimpleReportEntry(this.getClass().getName(), clazz.getName());
 
@@ -329,24 +326,19 @@ public class JCSJUnit4Provider extends AbstractProvider {
 		// Here we shall parallelize somehow
 		if (null != testMethods) {
 
-			System.out.println("JCSJUnit4Provider.execute() JUnit 4 Style");
-
 			Method[] methods = testClass.getMethods();
 			for (Method method : methods) {
 				for (String testMethod : testMethods) {
 					if (SelectorUtils.match(testMethod, method.getName())) {
 						final String methodName = method.getName();
-
-						System.err.println("\n \t\t ** SUBMIT Test : " + testClass);
-						System.err.println(" \t\t " + Arrays.toString(testMethods));
+						// NPE ?!
+						log.warning("THIS BRANCH WAS NEVER TESTED !");
 
 						Runner junitTestRunner = Request.method(testClass, methodName).getRunner();
-						System.out
-								.println("JCSJUnit4Provider.executeParallel: Override scheduler for test " + testClass);
-						((JCSRunner) junitTestRunner)
-								.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit));
-
-						System.out.println("JCSJUnit4Provider.executeParallel(...).new Runnable() {...}.run()");
+						if (junitTestRunner instanceof JCSRunner) {
+							((JCSRunner) junitTestRunner)
+									.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit));
+						}
 						junitTestRunner.run(fNotifier);
 					}
 				}
@@ -354,26 +346,19 @@ public class JCSJUnit4Provider extends AbstractProvider {
 			}
 		}
 
-		System.out.println("JCSJUnit4Provider.execute() JUnit 3 Style");
-
-		// Already here there is a problem !
 		Runner junitTestRunner = Request.aClass(testClass).getRunner();
 
-		System.out.println("JCSJUnit4Provider - 3 style runner " + junitTestRunner);
-
 		if (junitTestRunner instanceof JCSRunner) {
-			System.out.println("Override scheduler for test " + testClass);
+			log.fine("Override scheduler for test " + testClass);
 			((JCSRunner) junitTestRunner)
 					.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit));
 
 		} else if (junitTestRunner instanceof JUnit38ClassRunner) {
-			System.out.println("Override scheduler for test " + testClass);
+			log.fine("Override scheduler for test " + testClass);
 			((JUnit38ClassRunner) junitTestRunner)
 					.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit));
 
 		}
-
-		System.out.println("JCSJUnit4Provider.executeParallel(...).new Runnable() {...}.run()");
 		junitTestRunner.run(fNotifier);
 	}
 

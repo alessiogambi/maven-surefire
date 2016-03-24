@@ -2,7 +2,6 @@ package org.apache.maven.surefire.junitcore;
 
 import java.util.concurrent.ExecutionException;
 
-import org.junit.experimental.cloud.JCSSuiteParallelRunner;
 import org.junit.experimental.cloud.scheduling.JCSParallelScheduler;
 import org.junit.runner.Computer;
 import org.junit.runner.Runner;
@@ -58,7 +57,7 @@ public class JCSConfigurableParallelComputer extends Computer {
 		Runner suite = super.getSuite(builder, classes); // This call all the
 															// possible
 		// TODO Change with parameters
-		return parallelize(suite, new JCSParallelScheduler(null, 1, -1));
+		return parallelize(suite, new JCSParallelScheduler("JCS Configurable Parallel Computer", 1, -1));
 	}
 
 }
