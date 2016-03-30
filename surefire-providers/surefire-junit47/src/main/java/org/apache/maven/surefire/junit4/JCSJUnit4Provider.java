@@ -247,16 +247,10 @@ public class JCSJUnit4Provider extends AbstractProvider {
 		System.out.println("JCSJUnit4Provider.executeTestSet() Executing " + clazz);
 
 		// This one is the guy responsible to printout the summary after the
-		// execution
+		// execution ?
 		final ReportEntry report = new SimpleReportEntry(this.getClass().getName(), clazz.getName());
 
 		reporter.testSetStarting(report);
-
-		// TODO We need to think of a Common Runner and infrastructure to store
-		// and manage thins.
-		// One idea whould be in anycase to use the CoreParallel stuff and
-		// "simply" include JUni3 style tests.
-		// Basically every new JCSRunner "joins" the underlying infrastructure.
 
 		try {
 
