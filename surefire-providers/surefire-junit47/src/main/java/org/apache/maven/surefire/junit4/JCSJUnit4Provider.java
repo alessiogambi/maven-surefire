@@ -64,7 +64,6 @@ import at.ac.tuwien.infosys.jcloudscale.vm.docker.DockerCloudPlatformConfigurati
 /**
  * @author Alessio Gambi
  */
-// @Logged
 public class JCSJUnit4Provider extends AbstractProvider {
 
 	private static int concurrentTestCasesLimit = Integer.parseInt(System.getProperty("concurrent.test.cases", "-1"));
@@ -97,10 +96,24 @@ public class JCSJUnit4Provider extends AbstractProvider {
 		// LocalCloudPlatformConfiguration())
 		// .with(policy).withLoggingClient(Level.OFF).withLoggingServer(Level.OFF).build();
 
+		// TODO Reads this from files
 		JCloudScaleConfiguration config = new JCloudScaleConfigurationBuilder(new DockerCloudPlatformConfiguration(
-				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", "")).with(policy)
-						.withCommunicationServerPublisher(false).withMQServer("192.168.56.101", 61616)
-						.withLoggingClient(Level.parse(loggerClient)).withLoggingServer(Level.parse(loggerServer))// .withRedirectAllOutput(true)//
+				"http://192.168.56.101:2375", "", "alessio/jcs:0.4.6-SNAPSHOT-SHADED", "", ""))//
+						.with(policy)//
+						.withCommunicationServerPublisher(false)// ?
+						.withMQServer("192.168.56.101", 61616)//
+						.withLoggingClient(Level.parse(loggerClient)).withLoggingServer(Level.parse(loggerServer))//
+						.withRedirectAllOutput(false)//
+						.withDistributionTraceLogger(true).withDistributionTraceLogger(Level.INFO) // TODO
+																									// How
+																									// this
+																									// work
+																									// with
+																									// non
+																									// redirecting
+																									// stuff
+																									// ?
+						.withMonitoring(true) // Events
 						.build();
 
 		JCloudScaleClient.setConfiguration(config);
@@ -203,8 +216,9 @@ public class JCSJUnit4Provider extends AbstractProvider {
 				Iterator<Class<?>> iter = testsToRun.iterator(); iter.hasNext();) {
 					// This shall submit test for the execution.
 					final Class<?> testClass = iter.next();
-					System.out.println(
-							"JCSJUnit4Provider.invoke() Submit " + testClass.getSimpleName() + " for execution");
+					// System.out.println(
+					// "JCSJUnit4Provider.invoke() Submit " +
+					// testClass.getSimpleName() + " for execution");
 
 					scheduler.schedule(new Runnable() {
 						public void run() {
@@ -219,7 +233,7 @@ public class JCSJUnit4Provider extends AbstractProvider {
 					});
 				}
 			} finally {
-				System.out.println("All test cases submitted.");
+				// System.out.println("All test cases submitted.");
 				// Here let's wait for the result and blocks
 				scheduler.finished();
 			}
@@ -244,7 +258,8 @@ public class JCSJUnit4Provider extends AbstractProvider {
 	private void executeTestSet(Class<?> clazz, RunListener reporter, RunNotifier listeners)
 			throws ReporterException, TestSetFailedException {
 
-		System.out.println("JCSJUnit4Provider.executeTestSet() Executing " + clazz);
+		// System.out.println("JCSJUnit4Provider.executeTestSet() Executing " +
+		// clazz);
 
 		// This one is the guy responsible to printout the summary after the
 		// execution ?
@@ -341,7 +356,8 @@ public class JCSJUnit4Provider extends AbstractProvider {
 	private static void executeParallel(Class<?> testClass, final RunNotifier fNotifier, String[] testMethods)
 			throws TestSetFailedException {
 
-		System.out.println("JCSJUnit4Provider.executeParallel() " + testClass);
+		// System.out.println("JCSJUnit4Provider.executeParallel() " +
+		// testClass);
 		if (null != testMethods) {
 
 			Method[] methods = testClass.getMethods();
@@ -350,8 +366,9 @@ public class JCSJUnit4Provider extends AbstractProvider {
 					if (SelectorUtils.match(testMethod, method.getName())) {
 						final String methodName = method.getName();
 						// NPE ?!
-						System.out.println(
-								"\n-----\n\tJCSJUnit4Provider.executeParallel() : THIS BRANCH WAS NEVER TESTED !");
+						// System.out.println(
+						// "\n-----\n\tJCSJUnit4Provider.executeParallel() :
+						// THIS BRANCH WAS NEVER TESTED !");
 
 						Runner junitTestRunner = Request.method(testClass, methodName).getRunner();
 						if (junitTestRunner instanceof JCSRunner) {
@@ -368,12 +385,14 @@ public class JCSJUnit4Provider extends AbstractProvider {
 		Runner junitTestRunner = Request.aClass(testClass).getRunner();
 
 		if (junitTestRunner instanceof JCSRunner) {
-			System.out.println("JUnit 3 style but Junit 4 runner. Override scheduler for test " + testClass);
+			// System.out.println("JUnit 3 style but Junit 4 runner. Override
+			// scheduler for test " + testClass);
 			((JCSRunner) junitTestRunner)
 					.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit));
 
 		} else if (junitTestRunner instanceof JUnit38ClassRunner) {
-			System.out.println("JUnit 3 style and Junit 3 runner. Override scheduler for test " + testClass);
+			// System.out.println("JUnit 3 style and Junit 3 runner. Override
+			// scheduler for test " + testClass);
 			((JUnit38ClassRunner) junitTestRunner)
 					.setScheduler(new JCSParallelScheduler(testClass, concurrentTestPerTestClassLimit));
 
@@ -383,7 +402,8 @@ public class JCSJUnit4Provider extends AbstractProvider {
 
 	private static void executeSequential(Class<?> testClass, final RunNotifier fNotifier, String[] testMethods)
 			throws TestSetFailedException {
-		System.out.println("JCSJUnit4Provider.executeSequential() " + testClass);
+		// System.out.println("JCSJUnit4Provider.executeSequential() " +
+		// testClass);
 		if (null != testMethods) {
 
 			Method[] methods = testClass.getMethods();
