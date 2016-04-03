@@ -79,8 +79,9 @@ public class JCSJUnit4Provider extends AbstractProvider {
 
 	private static int sizeLimit = Integer.parseInt(System.getProperty("max.host", "-1"));
 
-	private static String loggerClient = System.getProperty("logger.client", "" + Level.INFO);
-	private static String loggerServer = System.getProperty("logger.server", "" + Level.INFO);
+	private static String loggerClient = System.getProperty("logger.client", "" + Level.OFF);
+	private static String loggerServer = System.getProperty("logger.server", "" + Level.OFF);
+	private static String tracingLevel = System.getProperty("tracing.level", "" + Level.OFF);
 
 	/**
 	 * HARDCODED CONFIGURATION IS BAD, BUT ONLY SOME PARAMETERS SHOULD BE
@@ -103,17 +104,13 @@ public class JCSJUnit4Provider extends AbstractProvider {
 						.withCommunicationServerPublisher(false)// ?
 						.withMQServer("192.168.56.101", 61616)//
 						.withLoggingClient(Level.parse(loggerClient)).withLoggingServer(Level.parse(loggerServer))//
-						.withRedirectAllOutput(false)//
-						.withDistributionTraceLogger(true).withDistributionTraceLogger(Level.INFO) // TODO
-																									// How
-																									// this
-																									// work
-																									// with
-																									// non
-																									// redirecting
-																									// stuff
-																									// ?
-						.withMonitoring(true) // Events
+						.withRedirectAllOutput(true)//
+						.withDistributionTraceLogger(Level.parse(tracingLevel))
+						// //
+						// Enabling this one results in NPE
+						// .withMonitoring(true) // Enable Standard Events
+						// .withMonitoringEvents(TestLifeCycleEvent.class)//
+						// Enable Custom Events
 						.build();
 
 		JCloudScaleClient.setConfiguration(config);
@@ -171,6 +168,9 @@ public class JCSJUnit4Provider extends AbstractProvider {
 					+ "\t concurrentTestsFromSameTestClassPerHost"
 					+ String.format("%2s", concurrentTestsFromSameTestClassPerHost) + "\n"//
 					+ "\t sizeLimit\t\t\t\t" + String.format("%2s", sizeLimit) + "\n"//
+					+ "\t tracing log \t" + tracingLevel + "\n"//
+					+ "\t client log\t" + loggerClient + "\n"//
+					+ "\t server log\t" + loggerServer + "\n"//
 					+ "==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ==== ====\n");
 		}
 		configureDefaultJCloudScale();
@@ -262,7 +262,7 @@ public class JCSJUnit4Provider extends AbstractProvider {
 		// clazz);
 
 		// This one is the guy responsible to printout the summary after the
-		// execution ?
+		// execution ? -
 		final ReportEntry report = new SimpleReportEntry(this.getClass().getName(), clazz.getName());
 
 		reporter.testSetStarting(report);
